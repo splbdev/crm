@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { estimates, clients as clientsApi } from '../api';
-import { FiPlus, FiEdit2, FiTrash2, FiArrowRight } from 'react-icons/fi';
+import { FiPlus, FiEdit2, FiTrash2, FiArrowRight, FiEye, FiX } from 'react-icons/fi';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 
@@ -11,6 +11,7 @@ export default function Estimates() {
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [editing, setEditing] = useState(null);
+    const [previewEstimate, setPreviewEstimate] = useState(null);
 
     useEffect(() => { loadData(); }, []);
 
@@ -110,7 +111,10 @@ export default function Estimates() {
                                             </span>
                                         </td>
                                         <td>
-                                            <div style={{ display: 'flex', gap: 6 }}>
+                                            <div style={{ display: 'flex', gap: 4 }}>
+                                                <button className="btn btn-sm btn-secondary" onClick={() => setPreviewEstimate(est)} title="Preview">
+                                                    <FiEye />
+                                                </button>
                                                 {est.status !== 'ACCEPTED' && (
                                                     <button className="btn btn-sm btn-success" onClick={() => handleConvert(est.id)} title="Convert to Invoice">
                                                         <FiArrowRight />
@@ -142,6 +146,13 @@ export default function Estimates() {
                     clients={clients}
                     onClose={() => { setShowModal(false); setEditing(null); }}
                     onSubmit={handleSubmit}
+                />
+            )}
+
+            {previewEstimate && (
+                <EstimatePreview
+                    estimate={previewEstimate}
+                    onClose={() => setPreviewEstimate(null)}
                 />
             )}
         </div>
@@ -219,6 +230,80 @@ function EstimateModal({ estimate, clients, onClose, onSubmit }) {
                         <button type="submit" className="btn btn-primary">{estimate ? 'Update' : 'Create'}</button>
                     </div>
                 </form>
+            </div>
+        </div>
+    );
+}
+
+function EstimatePreview({ estimate, onClose }) {
+    const formatCurrency = (amount) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount || 0);
+    const items = estimate.items || [];
+
+    return (
+        <div className="modal-overlay" onClick={onClose}>
+            <div className="modal" style={{ maxWidth: 700 }} onClick={e => e.stopPropagation()}>
+                <div className="modal-header">
+                    <h3 className="modal-title">Estimate {estimate.number}</h3>
+                    <button className="btn btn-icon btn-secondary" onClick={onClose}><FiX /></button>
+                </div>
+                <div className="modal-body">
+                    <div className="estimate-preview">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 24 }}>
+                            <div>
+                                <h2 style={{ margin: 0, color: 'var(--primary)' }}>ESTIMATE</h2>
+                                <p style={{ color: 'var(--text-secondary)', margin: '4px 0' }}>#{estimate.number}</p>
+                            </div>
+                            <div style={{ textAlign: 'right' }}>
+                                <span className={`badge badge-${estimate.status === 'ACCEPTED' ? 'success' : estimate.status === 'REJECTED' ? 'danger' : 'info'}`}>
+                                    {estimate.status}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-2" style={{ marginBottom: 24 }}>
+                            <div>
+                                <strong>Prepared For:</strong>
+                                <p style={{ margin: '4px 0' }}>{estimate.client?.name || 'N/A'}</p>
+                                {estimate.client?.email && <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: 14 }}>{estimate.client.email}</p>}
+                            </div>
+                            <div style={{ textAlign: 'right' }}>
+                                <p style={{ margin: '4px 0' }}><strong>Date:</strong> {format(new Date(estimate.date), 'MMM d, yyyy')}</p>
+                                {estimate.expiryDate && <p style={{ margin: 0 }}><strong>Expires:</strong> {format(new Date(estimate.expiryDate), 'MMM d, yyyy')}</p>}
+                            </div>
+                        </div>
+
+                        <table style={{ width: '100%', marginBottom: 16 }}>
+                            <thead>
+                                <tr style={{ borderBottom: '2px solid var(--border)' }}>
+                                    <th style={{ textAlign: 'left', padding: 8 }}>Description</th>
+                                    <th style={{ textAlign: 'right', padding: 8 }}>Qty</th>
+                                    <th style={{ textAlign: 'right', padding: 8 }}>Price</th>
+                                    <th style={{ textAlign: 'right', padding: 8 }}>Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {items.map((item, idx) => {
+                                    const lineTotal = (item.quantity || 1) * (item.price || 0);
+                                    return (
+                                        <tr key={idx} style={{ borderBottom: '1px solid var(--border)' }}>
+                                            <td style={{ padding: 8 }}>{item.description}</td>
+                                            <td style={{ textAlign: 'right', padding: 8 }}>{item.quantity}</td>
+                                            <td style={{ textAlign: 'right', padding: 8 }}>{formatCurrency(item.price)}</td>
+                                            <td style={{ textAlign: 'right', padding: 8 }}>{formatCurrency(lineTotal)}</td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+
+                        <div style={{ textAlign: 'right', fontSize: 20, fontWeight: 700 }}>
+                            Total: {formatCurrency(estimate.total)}
+                        </div>
+                    </div>
+                </div>
+                <div className="modal-footer">
+                    <button className="btn btn-secondary" onClick={onClose}>Close</button>
+                </div>
             </div>
         </div>
     );

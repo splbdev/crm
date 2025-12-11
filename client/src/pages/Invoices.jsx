@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { invoices, clients as clientsApi } from '../api';
-import { FiPlus, FiEdit2, FiTrash2, FiCheck, FiRefreshCw } from 'react-icons/fi';
+import { invoices, clients as clientsApi, payments } from '../api';
+import { FiPlus, FiEdit2, FiTrash2, FiCheck, FiRefreshCw, FiDownload, FiEye, FiDollarSign, FiX } from 'react-icons/fi';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 
@@ -12,6 +12,8 @@ export default function Invoices() {
     const [showModal, setShowModal] = useState(false);
     const [editingInvoice, setEditingInvoice] = useState(null);
     const [filter, setFilter] = useState('');
+    const [previewInvoice, setPreviewInvoice] = useState(null);
+    const [paymentInvoice, setPaymentInvoice] = useState(null);
 
     useEffect(() => {
         loadData();
@@ -67,6 +69,26 @@ export default function Invoices() {
             loadData();
         } catch (error) {
             toast.error('Failed to save');
+        }
+    };
+
+    const handleDownloadPDF = async (inv) => {
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch(`${import.meta.env.VITE_API_URL}/api/invoices/${inv.id}/pdf`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (!response.ok) throw new Error('PDF generation failed');
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `invoice-${inv.number}.pdf`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+            toast.success('PDF downloaded');
+        } catch (error) {
+            toast.error('Failed to download PDF');
         }
     };
 
@@ -134,11 +156,22 @@ export default function Invoices() {
                                         <td><strong>{formatCurrency(inv.total)}</strong></td>
                                         <td><span className={`badge badge-${statusColors[inv.status]}`}>{inv.status}</span></td>
                                         <td>
-                                            <div style={{ display: 'flex', gap: 6 }}>
+                                            <div style={{ display: 'flex', gap: 4 }}>
+                                                <button className="btn btn-sm btn-secondary" onClick={() => setPreviewInvoice(inv)} title="Preview">
+                                                    <FiEye />
+                                                </button>
+                                                <button className="btn btn-sm btn-secondary" onClick={() => handleDownloadPDF(inv)} title="Download PDF">
+                                                    <FiDownload />
+                                                </button>
                                                 {inv.status !== 'PAID' && (
-                                                    <button className="btn btn-sm btn-success" onClick={() => handleMarkPaid(inv.id)} title="Mark Paid">
-                                                        <FiCheck />
-                                                    </button>
+                                                    <>
+                                                        <button className="btn btn-sm btn-info" onClick={() => setPaymentInvoice(inv)} title="Record Payment">
+                                                            <FiDollarSign />
+                                                        </button>
+                                                        <button className="btn btn-sm btn-success" onClick={() => handleMarkPaid(inv.id)} title="Mark Paid">
+                                                            <FiCheck />
+                                                        </button>
+                                                    </>
                                                 )}
                                                 <button className="btn btn-sm btn-secondary" onClick={() => { setEditingInvoice(inv); setShowModal(true); }}>
                                                     <FiEdit2 />
@@ -169,6 +202,178 @@ export default function Invoices() {
                     onSubmit={handleSubmit}
                 />
             )}
+
+            {previewInvoice && (
+                <InvoicePreview
+                    invoice={previewInvoice}
+                    onClose={() => setPreviewInvoice(null)}
+                    onDownload={() => handleDownloadPDF(previewInvoice)}
+                />
+            )}
+
+            {paymentInvoice && (
+                <PaymentModal
+                    invoice={paymentInvoice}
+                    onClose={() => setPaymentInvoice(null)}
+                    onSuccess={() => { setPaymentInvoice(null); loadData(); }}
+                />
+            )}
+        </div>
+    );
+}
+
+function InvoicePreview({ invoice, onClose, onDownload }) {
+    const formatCurrency = (amount) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount || 0);
+    const items = invoice.items || [];
+
+    return (
+        <div className="modal-overlay" onClick={onClose}>
+            <div className="modal" style={{ maxWidth: 700 }} onClick={e => e.stopPropagation()}>
+                <div className="modal-header">
+                    <h3 className="modal-title">Invoice {invoice.number}</h3>
+                    <button className="btn btn-icon btn-secondary" onClick={onClose}><FiX /></button>
+                </div>
+                <div className="modal-body">
+                    <div className="invoice-preview">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 24 }}>
+                            <div>
+                                <h2 style={{ margin: 0, color: 'var(--primary)' }}>INVOICE</h2>
+                                <p style={{ color: 'var(--text-secondary)', margin: '4px 0' }}>#{invoice.number}</p>
+                            </div>
+                            <div style={{ textAlign: 'right' }}>
+                                <span className={`badge badge-${invoice.status === 'PAID' ? 'success' : invoice.status === 'OVERDUE' ? 'danger' : 'info'}`}>
+                                    {invoice.status}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-2" style={{ marginBottom: 24 }}>
+                            <div>
+                                <strong>Bill To:</strong>
+                                <p style={{ margin: '4px 0' }}>{invoice.client?.name || 'N/A'}</p>
+                                {invoice.client?.email && <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: 14 }}>{invoice.client.email}</p>}
+                            </div>
+                            <div style={{ textAlign: 'right' }}>
+                                <p style={{ margin: '4px 0' }}><strong>Date:</strong> {format(new Date(invoice.date), 'MMM d, yyyy')}</p>
+                                <p style={{ margin: 0 }}><strong>Due:</strong> {format(new Date(invoice.dueDate), 'MMM d, yyyy')}</p>
+                            </div>
+                        </div>
+
+                        <table style={{ width: '100%', marginBottom: 16 }}>
+                            <thead>
+                                <tr style={{ borderBottom: '2px solid var(--border)' }}>
+                                    <th style={{ textAlign: 'left', padding: 8 }}>Description</th>
+                                    <th style={{ textAlign: 'right', padding: 8 }}>Qty</th>
+                                    <th style={{ textAlign: 'right', padding: 8 }}>Price</th>
+                                    <th style={{ textAlign: 'right', padding: 8 }}>Tax</th>
+                                    <th style={{ textAlign: 'right', padding: 8 }}>Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {items.map((item, idx) => {
+                                    const lineTotal = (item.quantity || 1) * (item.price || 0);
+                                    const taxAmount = lineTotal * ((item.tax || 0) / 100);
+                                    return (
+                                        <tr key={idx} style={{ borderBottom: '1px solid var(--border)' }}>
+                                            <td style={{ padding: 8 }}>{item.description}</td>
+                                            <td style={{ textAlign: 'right', padding: 8 }}>{item.quantity}</td>
+                                            <td style={{ textAlign: 'right', padding: 8 }}>{formatCurrency(item.price)}</td>
+                                            <td style={{ textAlign: 'right', padding: 8 }}>{item.tax}%</td>
+                                            <td style={{ textAlign: 'right', padding: 8 }}>{formatCurrency(lineTotal + taxAmount)}</td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+
+                        <div style={{ textAlign: 'right', fontSize: 20, fontWeight: 700 }}>
+                            Total: {formatCurrency(invoice.total)}
+                        </div>
+                    </div>
+                </div>
+                <div className="modal-footer">
+                    <button className="btn btn-secondary" onClick={onClose}>Close</button>
+                    <button className="btn btn-primary" onClick={onDownload}>
+                        <FiDownload /> Download PDF
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function PaymentModal({ invoice, onClose, onSuccess }) {
+    const [amount, setAmount] = useState(invoice.total);
+    const [method, setMethod] = useState('CASH');
+    const [notes, setNotes] = useState('');
+    const [loading, setLoading] = useState(false);
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        try {
+            await payments.recordManual({ invoiceId: invoice.id, amount, method, notes });
+            toast.success('Payment recorded');
+            onSuccess();
+        } catch (error) {
+            toast.error(error.response?.data?.error || 'Failed to record payment');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="modal-overlay" onClick={onClose}>
+            <div className="modal" style={{ maxWidth: 400 }} onClick={e => e.stopPropagation()}>
+                <div className="modal-header">
+                    <h3 className="modal-title">Record Payment</h3>
+                    <button className="btn btn-icon btn-secondary" onClick={onClose}><FiX /></button>
+                </div>
+                <form onSubmit={handleSubmit}>
+                    <div className="modal-body">
+                        <p style={{ marginBottom: 16 }}>
+                            Invoice: <strong>{invoice.number}</strong> — Total: <strong>${invoice.total.toFixed(2)}</strong>
+                        </p>
+                        <div className="form-group">
+                            <label className="form-label">Amount</label>
+                            <input
+                                type="number"
+                                className="form-input"
+                                value={amount}
+                                onChange={(e) => setAmount(parseFloat(e.target.value))}
+                                step="0.01"
+                                max={invoice.total}
+                                required
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">Payment Method</label>
+                            <select className="form-input" value={method} onChange={(e) => setMethod(e.target.value)}>
+                                <option value="CASH">Cash</option>
+                                <option value="CHECK">Check</option>
+                                <option value="BANK_TRANSFER">Bank Transfer</option>
+                                <option value="CREDIT_CARD">Credit Card</option>
+                                <option value="OTHER">Other</option>
+                            </select>
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">Notes (optional)</label>
+                            <textarea
+                                className="form-input"
+                                value={notes}
+                                onChange={(e) => setNotes(e.target.value)}
+                                rows={2}
+                            />
+                        </div>
+                    </div>
+                    <div className="modal-footer">
+                        <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+                        <button type="submit" className="btn btn-primary" disabled={loading}>
+                            {loading ? 'Recording...' : 'Record Payment'}
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
     );
 }

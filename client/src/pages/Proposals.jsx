@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { proposals } from '../api';
-import { FiPlus, FiEdit2, FiTrash2 } from 'react-icons/fi';
+import { FiPlus, FiEdit2, FiTrash2, FiEye, FiX } from 'react-icons/fi';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 
@@ -9,6 +9,7 @@ export default function Proposals() {
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [editing, setEditing] = useState(null);
+    const [previewProposal, setPreviewProposal] = useState(null);
 
     useEffect(() => { loadData(); }, []);
 
@@ -83,7 +84,8 @@ export default function Proposals() {
                                         <td><span className={`badge badge-${p.status === 'SENT' ? 'info' : 'default'}`}>{p.status}</span></td>
                                         <td>{format(new Date(p.createdAt), 'MMM d, yyyy')}</td>
                                         <td>
-                                            <div style={{ display: 'flex', gap: 6 }}>
+                                            <div style={{ display: 'flex', gap: 4 }}>
+                                                <button className="btn btn-sm btn-secondary" onClick={() => setPreviewProposal(p)} title="Preview"><FiEye /></button>
                                                 <button className="btn btn-sm btn-secondary" onClick={() => { setEditing(p); setShowModal(true); }}><FiEdit2 /></button>
                                                 <button className="btn btn-sm btn-danger" onClick={() => handleDelete(p.id)}><FiTrash2 /></button>
                                             </div>
@@ -99,6 +101,13 @@ export default function Proposals() {
             </div>
 
             {showModal && <ProposalModal proposal={editing} onClose={() => { setShowModal(false); setEditing(null); }} onSubmit={handleSubmit} />}
+
+            {previewProposal && (
+                <ProposalPreview
+                    proposal={previewProposal}
+                    onClose={() => setPreviewProposal(null)}
+                />
+            )}
         </div>
     );
 }
@@ -142,6 +151,45 @@ function ProposalModal({ proposal, onClose, onSubmit }) {
                         <button type="submit" className="btn btn-primary">{proposal ? 'Update' : 'Create'}</button>
                     </div>
                 </form>
+            </div>
+        </div>
+    );
+}
+
+function ProposalPreview({ proposal, onClose }) {
+    return (
+        <div className="modal-overlay" onClick={onClose}>
+            <div className="modal" style={{ maxWidth: 700, maxHeight: '80vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
+                <div className="modal-header">
+                    <h3 className="modal-title">{proposal.title}</h3>
+                    <button className="btn btn-icon btn-secondary" onClick={onClose}><FiX /></button>
+                </div>
+                <div className="modal-body">
+                    <div className="proposal-preview">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 24 }}>
+                            <div>
+                                <h2 style={{ margin: 0, color: 'var(--primary)' }}>PROPOSAL</h2>
+                                <p style={{ color: 'var(--text-secondary)', margin: '4px 0' }}>{proposal.title}</p>
+                            </div>
+                            <div style={{ textAlign: 'right' }}>
+                                <span className={`badge badge-${proposal.status === 'ACCEPTED' ? 'success' : proposal.status === 'REJECTED' ? 'danger' : proposal.status === 'SENT' ? 'info' : 'default'}`}>
+                                    {proposal.status}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div style={{ marginBottom: 24 }}>
+                            <p style={{ margin: '4px 0' }}><strong>Created:</strong> {format(new Date(proposal.createdAt), 'MMM d, yyyy')}</p>
+                        </div>
+
+                        <div style={{ padding: 16, backgroundColor: 'var(--bg-secondary)', borderRadius: 8 }}>
+                            <div style={{ whiteSpace: 'pre-wrap' }}>{proposal.content || 'No content provided.'}</div>
+                        </div>
+                    </div>
+                </div>
+                <div className="modal-footer">
+                    <button className="btn btn-secondary" onClick={onClose}>Close</button>
+                </div>
             </div>
         </div>
     );
