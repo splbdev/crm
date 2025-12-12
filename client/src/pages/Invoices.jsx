@@ -75,7 +75,8 @@ export default function Invoices() {
     const handleDownloadPDF = async (inv) => {
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(`${import.meta.env.VITE_API_URL}/api/invoices/${inv.id}/pdf`, {
+            const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+            const response = await fetch(`${API_BASE}/invoices/${inv.id}/pdf`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             if (!response.ok) throw new Error('PDF generation failed');

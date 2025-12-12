@@ -64,6 +64,49 @@ router.get('/', authMiddleware, async (req, res) => {
     }
 });
 
+// Get task stats (MUST be before /:id route)
+router.get('/stats/summary', authMiddleware, async (req, res) => {
+    try {
+        const [pending, inProgress, completed, overdue] = await Promise.all([
+            prisma.task.count({ where: { status: 'PENDING' } }),
+            prisma.task.count({ where: { status: 'IN_PROGRESS' } }),
+            prisma.task.count({ where: { status: 'COMPLETED' } }),
+            prisma.task.count({
+                where: {
+                    status: { not: 'COMPLETED' },
+                    dueDate: { lt: new Date() }
+                }
+            })
+        ]);
+
+        // Tasks due this week
+        const weekEnd = new Date();
+        weekEnd.setDate(weekEnd.getDate() + 7);
+
+        const dueThisWeek = await prisma.task.count({
+            where: {
+                status: { not: 'COMPLETED' },
+                dueDate: {
+                    gte: new Date(),
+                    lte: weekEnd
+                }
+            }
+        });
+
+        res.json({
+            pending,
+            inProgress,
+            completed,
+            overdue,
+            dueThisWeek,
+            total: pending + inProgress + completed
+        });
+    } catch (error) {
+        console.error('Task stats error:', error);
+        res.status(500).json({ error: 'Failed to fetch task stats' });
+    }
+});
+
 // Get single task
 router.get('/:id', authMiddleware, async (req, res) => {
     try {
@@ -179,49 +222,6 @@ router.delete('/:id', authMiddleware, async (req, res) => {
     } catch (error) {
         console.error('Delete task error:', error);
         res.status(500).json({ error: 'Failed to delete task' });
-    }
-});
-
-// Get task stats
-router.get('/stats/summary', authMiddleware, async (req, res) => {
-    try {
-        const [pending, inProgress, completed, overdue] = await Promise.all([
-            prisma.task.count({ where: { status: 'PENDING' } }),
-            prisma.task.count({ where: { status: 'IN_PROGRESS' } }),
-            prisma.task.count({ where: { status: 'COMPLETED' } }),
-            prisma.task.count({
-                where: {
-                    status: { not: 'COMPLETED' },
-                    dueDate: { lt: new Date() }
-                }
-            })
-        ]);
-
-        // Tasks due this week
-        const weekEnd = new Date();
-        weekEnd.setDate(weekEnd.getDate() + 7);
-
-        const dueThisWeek = await prisma.task.count({
-            where: {
-                status: { not: 'COMPLETED' },
-                dueDate: {
-                    gte: new Date(),
-                    lte: weekEnd
-                }
-            }
-        });
-
-        res.json({
-            pending,
-            inProgress,
-            completed,
-            overdue,
-            dueThisWeek,
-            total: pending + inProgress + completed
-        });
-    } catch (error) {
-        console.error('Task stats error:', error);
-        res.status(500).json({ error: 'Failed to fetch task stats' });
     }
 });
 

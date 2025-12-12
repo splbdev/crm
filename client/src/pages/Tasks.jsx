@@ -28,11 +28,11 @@ export default function Tasks() {
         try {
             const [tasksRes, clientsRes, statsRes] = await Promise.all([
                 tasks.getAll(filters),
-                clients.getAll(),
+                clients.getAll({ limit: 100 }),
                 tasks.getStats()
             ]);
             setTaskList(tasksRes.data);
-            setClientList(clientsRes.data);
+            setClientList(clientsRes.data.clients || []);
             setStats(statsRes.data);
         } catch (error) {
             console.error('Failed to load tasks:', error);
