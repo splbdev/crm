@@ -4,6 +4,7 @@ import {
     FiTrendingUp, FiTrendingDown, FiUsers, FiDollarSign,
     FiFileText, FiPercent, FiClock, FiPieChart
 } from 'react-icons/fi';
+import { LineChart, Line, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 export default function Analytics() {
     const [revenueData, setRevenueData] = useState(null);
@@ -46,6 +47,8 @@ export default function Analytics() {
         }).format(amount || 0);
     };
 
+    const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+
     if (loading) {
         return (
             <div className="page">
@@ -53,6 +56,13 @@ export default function Analytics() {
             </div>
         );
     }
+
+    // Prepare pie chart data for invoice status
+    const invoiceStatusData = invoiceData?.summary ? [
+        { name: 'Paid', value: invoiceData.summary.paidAmount || 0 },
+        { name: 'Pending', value: invoiceData.summary.pendingAmount || 0 },
+        { name: 'Overdue', value: invoiceData.summary.overdueAmount || 0 }
+    ].filter(item => item.value > 0) : [];
 
     return (
         <div className="page">
@@ -116,31 +126,26 @@ export default function Analytics() {
                 </div>
             </div>
 
-            {/* Revenue Chart */}
+            {/* Revenue Chart with Recharts */}
             <div className="card" style={{ marginBottom: 24 }}>
                 <div className="card-header">
                     <h3 className="card-title">Revenue Trend</h3>
                 </div>
                 <div style={{ padding: 20 }}>
                     {revenueData?.data?.length > 0 ? (
-                        <div className="chart-container">
-                            <div className="bar-chart">
-                                {revenueData.data.slice(-12).map((item, index) => {
-                                    const maxValue = Math.max(...revenueData.data.map(d => d.amount));
-                                    const height = maxValue > 0 ? (item.amount / maxValue) * 200 : 0;
-                                    return (
-                                        <div key={index} className="bar-item">
-                                            <div
-                                                className="bar"
-                                                style={{ height: `${height}px` }}
-                                                title={`${item.period}: ${formatCurrency(item.amount)}`}
-                                            />
-                                            <span className="bar-label">{item.period.slice(-5)}</span>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
+                        <ResponsiveContainer width="100%" height={300}>
+                            <LineChart data={revenueData.data.slice(-12).map(item => ({
+                                period: item.period.slice(-5),
+                                amount: item.amount
+                            }))}>
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis dataKey="period" />
+                                <YAxis />
+                                <Tooltip formatter={(value) => formatCurrency(value)} />
+                                <Legend />
+                                <Line type="monotone" dataKey="amount" stroke="#6366f1" strokeWidth={2} name="Revenue" />
+                            </LineChart>
+                        </ResponsiveContainer>
                     ) : (
                         <div className="empty-state">
                             <FiTrendingUp className="empty-state-icon" />
@@ -183,6 +188,29 @@ export default function Analytics() {
                                 <span className="stats-value">{invoiceData?.summary?.avgPaymentDays || 0} days</span>
                             </div>
                         </div>
+                        {invoiceStatusData.length > 0 && (
+                            <div style={{ marginTop: '1.5rem' }}>
+                                <ResponsiveContainer width="100%" height={200}>
+                                    <PieChart>
+                                        <Pie
+                                            data={invoiceStatusData}
+                                            cx="50%"
+                                            cy="50%"
+                                            labelLine={false}
+                                            label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                                            outerRadius={80}
+                                            fill="#8884d8"
+                                            dataKey="value"
+                                        >
+                                            {invoiceStatusData.map((entry, index) => (
+                                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                            ))}
+                                        </Pie>
+                                        <Tooltip formatter={(value) => formatCurrency(value)} />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                            </div>
+                        )}
                     </div>
                 </div>
 
